@@ -8,7 +8,7 @@ import { AdminSurveySubmissionsPage } from './pages/AdminSurveySubmissionsPage';
 import { SurveyViewPage } from './pages/SurveyViewPage';
 import HealthCheck from './components/HealthCheck';
 import type { ReactNode } from 'react';
-import { CircularProgress, Container } from '@mui/material';
+import { CircularProgress, Container, Stack, Typography } from '@mui/material';
 
 function ProtectedRoute({
   children,
@@ -22,7 +22,12 @@ function ProtectedRoute({
   if (loading) {
     return (
       <Container maxWidth="sm" sx={{ mt: 8, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
+        <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
+          <CircularProgress size={28} />
+          <Typography variant="body2" color="text.secondary">
+            Loading app...
+          </Typography>
+        </Stack>
       </Container>
     );
   }

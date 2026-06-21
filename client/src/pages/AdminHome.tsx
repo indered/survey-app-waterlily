@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
   AppBar,
@@ -26,25 +26,22 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Toolbar,
   Typography
 } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import LogoutIcon from '@mui/icons-material/Logout';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useAuth } from '../context/AuthContext';
+import { FeedbackSnackbar, type FeedbackToast } from '../components/FeedbackSnackbar';
 import { deleteSurveyByFriendlyUrl, fetchSurveys, updateSurvey, type PaginatedResponse, type Survey } from '../lib/api';
-
-function DeleteSurveyIcon() {
-  return (
-    <Box component="svg" viewBox="0 0 24 24" aria-hidden="true" sx={{ width: 18, height: 18, display: 'block' }}>
-      <path
-        fill="currentColor"
-        d="M9 3.75h6l.75 1.5H20v1.5H4v-1.5h4.25L9 3.75Zm1.5 6v7.5H12v-7.5h-1.5Zm3 0v7.5H15v-7.5h-1.5ZM6.5 7.5h11l-.75 11.25a1.5 1.5 0 0 1-1.5 1.5h-6.5a1.5 1.5 0 0 1-1.5-1.5L6.5 7.5Z"
-      />
-    </Box>
-  );
-}
 
 export function AdminHome() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signOut, user } = useAuth();
   const [surveysPage, setSurveysPage] = useState<PaginatedResponse<Survey> | null>(null);
   const [page, setPage] = useState(0);
@@ -56,6 +53,17 @@ export function AdminHome() {
   const [deleteTarget, setDeleteTarget] = useState<Survey | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<FeedbackToast>(null);
+
+  const surveys = surveysPage?.items || [];
+
+  useEffect(() => {
+    if (typeof location.state === 'object' && location.state !== null && 'toast' in location.state) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setToast((location.state as { toast: FeedbackToast }).toast);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -99,12 +107,16 @@ export function AdminHome() {
       setDeleteTarget(null);
       if (page > 0 && (surveysPage?.items?.length || 0) === 1) {
         setPage(page - 1);
+        setToast({ message: 'Survey deleted.', severity: 'success' });
         return;
       }
 
       await loadSurveys();
+      setToast({ message: 'Survey deleted.', severity: 'success' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete survey');
+      const message = err instanceof Error ? err.message : 'Could not delete survey';
+      setError(message);
+      setToast({ message, severity: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -126,6 +138,10 @@ export function AdminHome() {
 
     try {
       await updateSurvey(survey.friendlyUrl, { status: nextStatus });
+      setToast({
+        message: checked ? 'Survey is live.' : 'Survey moved back to draft.',
+        severity: 'success'
+      });
     } catch (err) {
       setSurveysPage((current) => current
         ? {
@@ -134,7 +150,9 @@ export function AdminHome() {
         }
         : current
       );
-      setError(err instanceof Error ? err.message : 'Could not update survey status');
+      const message = err instanceof Error ? err.message : 'Could not update survey status';
+      setError(message);
+      setToast({ message, severity: 'error' });
     } finally {
       setStatusUpdating((current) => {
         const next = { ...current };
@@ -144,24 +162,69 @@ export function AdminHome() {
     }
   };
 
+  const copySurveyLink = async (survey: Survey) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/survey/${survey.friendlyUrl}`);
+      setToast({ message: `Copied ${survey.friendlyUrl}.`, severity: 'success' });
+    } catch {
+      setToast({ message: 'Could not copy the survey link.', severity: 'error' });
+    }
+  };
+
+  const renderSurveyStatus = (survey: Survey) => (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: 'center' }}
+      onClick={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}
+    >
+      <Switch
+        size="small"
+        checked={survey.status === 'ACTIVE'}
+        disabled={Boolean(statusUpdating[survey._id])}
+        onChange={(event) => void handleStatusToggle(survey, event.target.checked)}
+      />
+      <Chip
+        size="small"
+        label={survey.status}
+        color={survey.status === 'ACTIVE' ? 'success' : 'default'}
+        variant="outlined"
+      />
+    </Stack>
+  );
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
       <AppBar position="static" color="default" elevation={0}>
-        <Toolbar sx={{ minHeight: 64, gap: 1.5 }}>
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, gap: 1, py: { xs: 0.75, sm: 0 } }}>
           <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
             Waterlily Surveys
           </Typography>
           <Chip
             size="small"
             label={user?.fullname || user?.email || 'Admin'}
-            sx={{ maxWidth: 240 }}
+            sx={{ maxWidth: { xs: 150, sm: 240 } }}
           />
+          <Tooltip title="Sign out">
+            <IconButton
+              color="inherit"
+              onClick={() => {
+                signOut();
+                navigate('/auth');
+              }}
+              sx={{ display: { xs: 'inline-flex', sm: 'none' } }}
+              aria-label="Sign out"
+            >
+              <LogoutIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Button
             color="inherit"
             onClick={() => {
               signOut();
               navigate('/auth');
             }}
+            sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
           >
             Sign out
           </Button>
@@ -175,7 +238,7 @@ export function AdminHome() {
               Surveys
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Create a survey, review inactive drafts, and jump into submissions without leaving the table.
+              Create surveys, review drafts, and jump into submissions without wrestling the table.
             </Typography>
           </Box>
 
@@ -201,27 +264,40 @@ export function AdminHome() {
 
           <Paper sx={{ overflow: 'hidden' }}>
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress />
-              </Box>
+              <Stack spacing={1.5} sx={{ alignItems: 'center', py: 8 }}>
+                <CircularProgress size={28} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading surveys...
+                </Typography>
+              </Stack>
             ) : error ? (
               <Box sx={{ p: 2 }}>
-                <Alert severity="error">{error}</Alert>
+                <Alert
+                  severity="error"
+                  action={
+                    <Button color="inherit" size="small" onClick={() => void loadSurveys()}>
+                      Try again
+                    </Button>
+                  }
+                >
+                  Couldn't load surveys. Try again.
+                </Alert>
               </Box>
             ) : (
               <>
-                <TableContainer>
+                <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
                         <TableCell sx={{ width: '34%' }}>Name</TableCell>
-                        <TableCell sx={{ width: '32%' }}>Public URL</TableCell>
+                        <TableCell sx={{ width: '18%' }}>Slug</TableCell>
+                        <TableCell sx={{ width: '14%' }}>Submissions</TableCell>
                         <TableCell sx={{ width: '18%' }}>Status</TableCell>
-                        <TableCell sx={{ width: '20%' }}>Created</TableCell>
-                        <TableCell align="right" sx={{ width: 80 }}>
+                        <TableCell sx={{ width: '14%' }}>Created</TableCell>
+                        <TableCell align="right" sx={{ width: 72 }}>
                           Edit
                         </TableCell>
-                        <TableCell align="right" sx={{ width: '18%' }}>
+                        <TableCell align="right" sx={{ width: 72 }}>
                           Open
                         </TableCell>
                         <TableCell align="right" sx={{ width: 56 }}>
@@ -230,7 +306,7 @@ export function AdminHome() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(surveysPage?.items || []).map((survey) => (
+                      {surveys.map((survey) => (
                         <TableRow
                           key={survey._id}
                           hover
@@ -254,45 +330,29 @@ export function AdminHome() {
                             >
                               <Typography
                                 variant="body2"
-                                sx={{ minWidth: 0, wordBreak: 'break-all', fontFamily: 'monospace' }}
+                                sx={{ minWidth: 0, fontFamily: 'monospace' }}
                               >
-                                {`${window.location.origin}/survey/${survey.friendlyUrl}`}
+                                {survey.friendlyUrl}
                               </Typography>
                               <Button
                                 size="small"
                                 variant="text"
+                                startIcon={<ContentCopyIcon fontSize="small" />}
                                 sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-                                onClick={async (event: MouseEvent<HTMLButtonElement>) => {
+                                onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                   event.stopPropagation();
-                                  await navigator.clipboard.writeText(
-                                    `${window.location.origin}/survey/${survey.friendlyUrl}`
-                                  );
+                                  void copySurveyLink(survey);
                                 }}
                               >
-                                Copy
+                                Copy link
                               </Button>
                             </Stack>
                           </TableCell>
                           <TableCell>
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              sx={{ alignItems: 'center' }}
-                              onClick={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}
-                            >
-                              <Switch
-                                size="small"
-                                checked={survey.status === 'ACTIVE'}
-                                disabled={Boolean(statusUpdating[survey._id])}
-                                onChange={(event) => void handleStatusToggle(survey, event.target.checked)}
-                              />
-                              <Chip
-                                size="small"
-                                label={survey.status}
-                                color={survey.status === 'ACTIVE' ? 'success' : 'default'}
-                                variant="outlined"
-                              />
-                            </Stack>
+                            <Typography variant="body2">{survey.submissionsCount || 0}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            {renderSurveyStatus(survey)}
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
@@ -300,28 +360,28 @@ export function AdminHome() {
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
-                            <Button
+                            <IconButton
                               size="small"
-                              variant="text"
                               onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                 event.stopPropagation();
                                 navigate(`/home/surveys/${encodeURIComponent(survey.friendlyUrl)}/edit`);
                               }}
+                              aria-label={`Edit ${survey.name}`}
                             >
-                              Edit
-                            </Button>
+                              <EditOutlinedIcon fontSize="small" />
+                            </IconButton>
                           </TableCell>
                           <TableCell align="right">
-                            <Button
+                            <IconButton
                               size="small"
-                              variant="text"
                               onClick={(event: MouseEvent<HTMLButtonElement>) => {
                                 event.stopPropagation();
                                 navigate(`/home/surveys/${encodeURIComponent(survey.friendlyUrl)}`);
                               }}
+                              aria-label={`Open ${survey.name}`}
                             >
-                              Open
-                            </Button>
+                              <OpenInNewIcon fontSize="small" />
+                            </IconButton>
                           </TableCell>
                           <TableCell align="right">
                             <IconButton
@@ -333,17 +393,17 @@ export function AdminHome() {
                               }}
                               aria-label={`Delete ${survey.name}`}
                             >
-                              <DeleteSurveyIcon />
+                              <DeleteOutlinedIcon fontSize="small" />
                             </IconButton>
                           </TableCell>
                         </TableRow>
                       ))}
-                      {!surveysPage?.items?.length ? (
+                      {!surveys.length ? (
                         <TableRow>
-                          <TableCell colSpan={7}>
+                          <TableCell colSpan={8}>
                             <Box sx={{ py: 4 }}>
                               <Typography variant="body2" color="text.secondary">
-                                No surveys yet. Create the first one from the button above.
+                                No surveys yet. Create your first survey from the button above.
                               </Typography>
                             </Box>
                           </TableCell>
@@ -352,6 +412,110 @@ export function AdminHome() {
                     </TableBody>
                   </Table>
                 </TableContainer>
+
+                <Stack spacing={1.25} sx={{ display: { xs: 'flex', md: 'none' }, p: 1.25 }}>
+                  {surveys.map((survey) => (
+                    <Paper
+                      key={survey._id}
+                      variant="outlined"
+                      onClick={() => navigate(`/home/surveys/${encodeURIComponent(survey.friendlyUrl)}`)}
+                      sx={{ p: 1.5, cursor: 'pointer' }}
+                    >
+                      <Stack spacing={1.25}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                              {survey.name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                              {survey.description || 'No description'}
+                            </Typography>
+                          </Box>
+                          <Chip
+                            size="small"
+                            label={survey.status}
+                            color={survey.status === 'ACTIVE' ? 'success' : 'default'}
+                            variant="outlined"
+                          />
+                        </Stack>
+
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Public slug
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {survey.friendlyUrl}
+                            </Typography>
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon fontSize="small" />}
+                            onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                              event.stopPropagation();
+                              void copySurveyLink(survey);
+                            }}
+                            sx={{ flexShrink: 0 }}
+                          >
+                            Copy link
+                          </Button>
+                        </Stack>
+
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {survey.submissionsCount || 0} submissions
+                          </Typography>
+                          <Box onClick={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}>
+                            {renderSurveyStatus(survey)}
+                          </Box>
+                        </Stack>
+
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          <Button
+                            size="small"
+                            startIcon={<EditOutlinedIcon fontSize="small" />}
+                            onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                              event.stopPropagation();
+                              navigate(`/home/surveys/${encodeURIComponent(survey.friendlyUrl)}/edit`);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="small"
+                            startIcon={<OpenInNewIcon fontSize="small" />}
+                            onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                              event.stopPropagation();
+                              navigate(`/home/surveys/${encodeURIComponent(survey.friendlyUrl)}`);
+                            }}
+                          >
+                            Open
+                          </Button>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                              event.stopPropagation();
+                              setDeleteTarget(survey);
+                            }}
+                            aria-label={`Delete ${survey.name}`}
+                          >
+                            <DeleteOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  ))}
+
+                  {!surveys.length ? (
+                    <Box sx={{ py: 4, px: 1 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No surveys yet. Create your first survey from the button above.
+                      </Typography>
+                    </Box>
+                  ) : null}
+                </Stack>
 
                 <TablePagination
                   component="div"
@@ -401,6 +565,8 @@ export function AdminHome() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <FeedbackSnackbar toast={toast} onClose={() => setToast(null)} />
     </Box>
   );
 }

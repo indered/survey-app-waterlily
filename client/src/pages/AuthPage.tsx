@@ -12,6 +12,7 @@ import {
   Typography
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { FeedbackSnackbar, type FeedbackToast } from '../components/FeedbackSnackbar';
 
 type AuthMode = 'login' | 'signup';
 const defaultRouteFor = (role: 'admin' | 'user') => (role === 'admin' ? '/home' : '');
@@ -26,6 +27,8 @@ export function AuthPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [triedSubmit, setTriedSubmit] = useState(false);
+  const [toast, setToast] = useState<FeedbackToast>(null);
 
   const redirectTo = typeof location.state === 'object' && location.state !== null && 'from' in location.state
     ? String((location.state as { from?: string }).from || '')
@@ -56,13 +59,18 @@ export function AuthPage() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (loading) {
+      return;
+    }
+
+    setTriedSubmit(true);
     setLoading(true);
     setError(null);
 
     try {
       if (mode === 'signup') {
         if (!email || !password) {
-          throw new Error('Email and password are required');
+          throw new Error('Email and password are required.');
         }
         const newUser = await signUp(email, password, fullname);
         const destination = destinationFor(newUser.role);
@@ -71,7 +79,7 @@ export function AuthPage() {
         }
       } else {
         if (!email || !password) {
-          throw new Error('Email and password are required');
+          throw new Error('Email and password are required.');
         }
 
         const currentUser = await signIn(email, password);
@@ -82,11 +90,16 @@ export function AuthPage() {
       }
       resetFields();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      setError(message);
+      setToast({ message, severity: 'error' });
     } finally {
       setLoading(false);
     }
   };
+
+  const emailError = triedSubmit && email.trim().length === 0;
+  const passwordError = triedSubmit && password.trim().length === 0;
 
   return (
     <Container maxWidth={false} sx={{ mt: { xs: 2, md: 4 }, px: { xs: 1.5, md: 2 }, width: 1 }}>
@@ -108,7 +121,7 @@ export function AuthPage() {
             </Stack>
           ) : (
             <>
-              <Box component="form" onSubmit={submit}>
+              <Box component="form" onSubmit={submit} noValidate>
                 <Stack spacing={1.5}>
                   {mode === 'signup' && (
                     <TextField
@@ -125,6 +138,8 @@ export function AuthPage() {
                     onChange={(event) => setEmail(event.target.value)}
                     type="email"
                     required
+                    error={emailError}
+                    helperText={emailError ? 'Enter your email.' : ' '}
                   />
 
                   <TextField
@@ -133,10 +148,12 @@ export function AuthPage() {
                     onChange={(event) => setPassword(event.target.value)}
                     type="password"
                     required
+                    error={passwordError}
+                    helperText={passwordError ? 'Enter your password.' : ' '}
                   />
 
                   <Button type="submit" variant="contained" fullWidth disabled={loading}>
-                    {loading ? 'please wait...' : mode === 'login' ? 'Login' : 'Sign up'}
+                    {loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Sign up'}
                   </Button>
 
                   {error && <Alert severity="error">{error}</Alert>}
@@ -149,6 +166,7 @@ export function AuthPage() {
                 onClick={() => {
                   setMode(mode === 'login' ? 'signup' : 'login');
                   setError(null);
+                  setTriedSubmit(false);
                 }}
               >
                 {mode === 'login' ? 'Create an account' : 'Back to login'}
@@ -157,6 +175,7 @@ export function AuthPage() {
           )}
         </Stack>
       </Paper>
+      <FeedbackSnackbar toast={toast} onClose={() => setToast(null)} />
     </Container>
   );
 }

@@ -14,19 +14,19 @@ import {
   FormHelperText,
   FormLabel,
   LinearProgress,
-  MenuItem,
   Paper,
   Radio,
   RadioGroup,
   Rating,
-  Select,
-  Slider,
   Stack,
   TextField,
   Toolbar,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { FeedbackSnackbar, type FeedbackToast } from '../components/FeedbackSnackbar';
 import {
   createSubmission,
   fetchMySubmissions,
@@ -44,7 +44,12 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const resumeKey = (userId: string, surveyId: string) => `survey_app_resume_${userId}_${surveyId}`;
 
 const isBlank = (value: unknown) => {
-  return value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0);
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === 'string' && value.trim().length === 0) ||
+    (Array.isArray(value) && value.length === 0)
+  );
 };
 
 const formatAnswer = (question: Question, value: unknown) => {
@@ -54,6 +59,10 @@ const formatAnswer = (question: Question, value: unknown) => {
 
   if (question.inputType === 'boolean') {
     return value === true ? 'Yes' : 'No';
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map(String).join(', ') : 'Not answered yet';
   }
 
   return String(value);
@@ -79,6 +88,18 @@ const normalizeInputValue = (question: Question, value: unknown) => {
     }
 
     return value;
+  }
+
+  if (question.inputType === 'mcq') {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.length ? String(value[0]) : '';
+    }
+
+    return String(value ?? '');
   }
 
   return typeof value === 'string' ? value : String(value ?? '');
@@ -113,8 +134,20 @@ const validateAnswer = (question: Question, value: unknown) => {
     }
   }
 
-  if (question.inputType === 'mcq' && !question.options.includes(String(value))) {
-    return 'Choose one of the available options.';
+  if (question.inputType === 'mcq') {
+    const selectedValues = Array.isArray(value)
+      ? value.map(String).filter(Boolean)
+      : typeof value === 'string' && value.trim()
+        ? [value]
+        : [];
+
+    if (selectedValues.length > 1) {
+      return 'Choose one option.';
+    }
+
+    if (selectedValues.some((selectedValue) => !question.options.includes(selectedValue))) {
+      return 'Choose only available options.';
+    }
   }
 
   if (question.inputType === 'rating') {
@@ -126,14 +159,19 @@ const validateAnswer = (question: Question, value: unknown) => {
   return '';
 };
 
-const answersFromSubmission = (submission: Submission | null) => {
+const answersFromSubmission = (submission: Submission | null, questions: Question[] = []) => {
   if (!submission) {
     return {};
   }
 
+  const questionsById = new Map(questions.map((question) => [question._id, question]));
+
   return submission.responses.reduce((accumulator, answer) => {
     const questionId = typeof answer.questionId === 'string' ? answer.questionId : answer.questionId._id;
-    accumulator[questionId] = answer.response;
+    const question = questionsById.get(questionId);
+    accumulator[questionId] = question?.inputType === 'mcq' && Array.isArray(answer.response)
+      ? String(answer.response[0] ?? '')
+      : answer.response;
     return accumulator;
   }, {} as AnswerMap);
 };
@@ -163,6 +201,7 @@ export function SurveyViewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<FeedbackToast>(null);
   const autosaveTimer = useRef<number | null>(null);
   const lastSavedPayload = useRef('');
 
@@ -202,7 +241,7 @@ export function SurveyViewPage() {
           responses: [],
           status: 'DRAFT'
         })).data;
-        const nextAnswers = answersFromSubmission(nextSubmission);
+        const nextAnswers = answersFromSubmission(nextSubmission, questions);
         const storedIndex = Number(localStorage.getItem(resumeKey(user.id, nextSurvey._id)));
         const nextIndex = Number.isInteger(storedIndex) && storedIndex >= 0 && storedIndex < questions.length
           ? storedIndex
@@ -262,7 +301,9 @@ export function SurveyViewPage() {
         })
         .catch((err) => {
           setSaveState('error');
-          setError(err instanceof Error ? err.message : 'Could not save your answer.');
+          const message = err instanceof Error ? err.message : 'Could not save your answer.';
+          setError(message);
+          setToast({ message, severity: 'error' });
         });
     }, 500);
 
@@ -330,6 +371,10 @@ export function SurveyViewPage() {
   };
 
   const submitFinal = async () => {
+    if (submitting || saveState === 'saving') {
+      return;
+    }
+
     if (!submission) {
       return;
     }
@@ -348,6 +393,7 @@ export function SurveyViewPage() {
       const firstInvalid = activeQuestions.findIndex((question) => nextErrors[question._id]);
       setActiveIndex(firstInvalid === -1 ? 0 : firstInvalid);
       setIsReviewing(false);
+      setToast({ message: 'Please complete the required questions.', severity: 'error' });
       return;
     }
 
@@ -363,8 +409,11 @@ export function SurveyViewPage() {
       if (resumeStorageKey) {
         localStorage.removeItem(resumeStorageKey);
       }
+      setToast({ message: 'Survey submitted.', severity: 'success' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not submit this survey.');
+      const message = err instanceof Error ? err.message : 'Could not submit this survey.';
+      setError(message);
+      setToast({ message, severity: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -445,6 +494,7 @@ export function SurveyViewPage() {
                 answers={answers}
                 errors={errors}
                 submitting={submitting}
+                savingDraft={saveState === 'saving'}
                 onEdit={jumpToQuestion}
                 onBack={goPrevious}
                 onSubmit={submitFinal}
@@ -465,6 +515,7 @@ export function SurveyViewPage() {
           </Stack>
         )}
       </Container>
+      <FeedbackSnackbar toast={toast} onClose={() => setToast(null)} />
     </Box>
   );
 }
@@ -592,21 +643,53 @@ function AnswerInput({
   }
 
   if (question.inputType === 'mcq') {
+    const selectedOption = typeof value === 'string'
+      ? value
+      : Array.isArray(value) && value.length
+        ? String(value[0])
+        : '';
+
     return (
       <FormControl fullWidth error={Boolean(error)}>
         <FormLabel sx={{ mb: 1 }}>Answer</FormLabel>
-        <Select
-          value={typeof value === 'string' ? value : ''}
-          displayEmpty
-          onChange={(event) => onChange(question, event.target.value)}
+        <ToggleButtonGroup
+          exclusive
+          value={selectedOption}
+          onChange={(_event, nextValue: string | null) => {
+            if (nextValue !== null) {
+              onChange(question, nextValue);
+            }
+          }}
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1,
+            '& .MuiToggleButtonGroup-grouped': {
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: '999px',
+              mx: 0,
+              px: 2,
+              py: 1,
+              minHeight: 42,
+              textTransform: 'none'
+            },
+            '& .MuiToggleButtonGroup-grouped.Mui-selected': {
+              bgcolor: 'primary.main',
+              borderColor: 'primary.main',
+              color: 'primary.contrastText',
+              '&:hover': {
+                bgcolor: 'primary.dark'
+              }
+            }
+          }}
         >
-          <MenuItem value="">Choose an option</MenuItem>
           {question.options.map((option) => (
-            <MenuItem key={option} value={option}>
+            <ToggleButton key={option} value={option} aria-label={option}>
               {option}
-            </MenuItem>
+            </ToggleButton>
           ))}
-        </Select>
+        </ToggleButtonGroup>
         <FormHelperText>{error || 'Choose one option.'}</FormHelperText>
       </FormControl>
     );
@@ -620,16 +703,6 @@ function AnswerInput({
           value={typeof value === 'number' ? value : null}
           onChange={(_event, nextValue) => onChange(question, nextValue || '')}
         />
-        <Box sx={{ width: 220, mt: 1 }}>
-          <Slider
-            min={1}
-            max={5}
-            step={1}
-          marks
-          value={typeof value === 'number' ? value : 1}
-          onChange={(_event, nextValue) => onChange(question, Array.isArray(nextValue) ? nextValue[0] : nextValue)}
-        />
-        </Box>
         <FormHelperText>{error || 'Choose a rating from 1 to 5.'}</FormHelperText>
       </FormControl>
     );
@@ -658,6 +731,7 @@ type ReviewStepProps = {
   answers: AnswerMap;
   errors: AnswerErrors;
   submitting: boolean;
+  savingDraft: boolean;
   // eslint-disable-next-line no-unused-vars
   onEdit: (...args: [number]) => void;
   onBack: () => void;
@@ -669,6 +743,7 @@ function ReviewStep({
   answers,
   errors,
   submitting,
+  savingDraft,
   onEdit,
   onBack,
   onSubmit
@@ -728,9 +803,11 @@ function ReviewStep({
           <Button variant="outlined" onClick={onBack} sx={{ minHeight: 44 }}>
             Back
           </Button>
-          <Button variant="contained" onClick={onSubmit} disabled={submitting} sx={{ minHeight: 44 }}>
+          <Button variant="contained" onClick={onSubmit} disabled={submitting || savingDraft} sx={{ minHeight: 44 }}>
             {submitting ? (
               <CircularProgress color="inherit" size={20} />
+            ) : savingDraft ? (
+              'Saving...'
             ) : (
               'Submit survey'
             )}

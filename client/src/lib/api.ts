@@ -27,6 +27,7 @@ export type Survey = {
   status: 'ACTIVE' | 'INACTIVE';
   createdBy: string;
   createdAt: string;
+  submissionsCount?: number;
   questions?: Question[];
 };
 

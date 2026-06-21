@@ -23,9 +23,13 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Toolbar,
   Typography
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import {
   fetchSubmissionById,
   fetchSurveyByFriendlyUrl,
@@ -55,6 +59,7 @@ export function AdminSurveySubmissionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const selectedUser = getSubmissionUser(selectedSubmission);
+  const submissions = submissionsPage?.items || [];
   const answerRows = useMemo(
     () => buildAnswerRows(survey?.questions || [], selectedSubmission),
     [selectedSubmission, survey]
@@ -153,14 +158,21 @@ export function AdminSurveySubmissionsPage() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
       <AppBar position="static" color="default" elevation={0}>
-        <Toolbar sx={{ minHeight: 64, gap: 1 }}>
-          <Button color="inherit" onClick={() => navigate('/home')} sx={{ whiteSpace: 'nowrap' }}>
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, gap: 1, flexWrap: { xs: 'wrap', sm: 'nowrap' }, py: { xs: 0.75, sm: 0 } }}>
+          <Button color="inherit" startIcon={<ArrowBackIcon fontSize="small" />} onClick={() => navigate('/home')} sx={{ minWidth: 0 }}>
             Back to surveys
           </Button>
           {friendlyUrl ? (
-            <Button color="inherit" onClick={() => navigate(`/home/surveys/${encodeURIComponent(friendlyUrl)}`)} sx={{ whiteSpace: 'nowrap' }}>
-              Back to survey
-            </Button>
+            <Tooltip title="Back to survey">
+              <Button
+                color="inherit"
+                onClick={() => navigate(`/home/surveys/${encodeURIComponent(friendlyUrl)}`)}
+                sx={{ minWidth: 0 }}
+                aria-label="Back to survey"
+              >
+                <ArticleOutlinedIcon fontSize="small" />
+              </Button>
+            </Tooltip>
           ) : null}
           <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
             Survey submissions
@@ -199,12 +211,15 @@ export function AdminSurveySubmissionsPage() {
 
           <Paper sx={{ overflow: 'hidden' }}>
             {loadingSurvey || loadingSubmissions ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress />
-              </Box>
+              <Stack spacing={1.5} sx={{ alignItems: 'center', py: 8 }}>
+                <CircularProgress size={28} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading submissions...
+                </Typography>
+              </Stack>
             ) : error ? (
               <Box sx={{ p: 2 }}>
-                <Alert severity="error">{error}</Alert>
+                <Alert severity="error">Could not load submissions. Try again.</Alert>
               </Box>
             ) : survey?.status !== 'ACTIVE' ? (
               <Box sx={{ p: 2 }}>
@@ -212,7 +227,7 @@ export function AdminSurveySubmissionsPage() {
               </Box>
             ) : (
               <>
-                <TableContainer>
+                <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
@@ -226,7 +241,7 @@ export function AdminSurveySubmissionsPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(submissionsPage?.items || []).map((submission) => {
+                      {submissions.map((submission) => {
                         const user = getSubmissionUser(submission);
                         const isSelected = selectedSubmission?._id === submission._id;
 
@@ -246,12 +261,12 @@ export function AdminSurveySubmissionsPage() {
                           </TableRow>
                         );
                       })}
-                      {!submissionsPage?.items?.length ? (
+                      {!submissions.length ? (
                         <TableRow>
                           <TableCell colSpan={5}>
                             <Box sx={{ py: 4 }}>
                               <Typography variant="body2" color="text.secondary">
-                                No submissions match the current filter.
+                                {debouncedSearch ? 'No submissions match the current filter.' : 'No submissions yet.'}
                               </Typography>
                             </Box>
                           </TableCell>
@@ -260,6 +275,57 @@ export function AdminSurveySubmissionsPage() {
                     </TableBody>
                   </Table>
                 </TableContainer>
+
+                <Stack spacing={1.25} sx={{ display: { xs: 'flex', md: 'none' }, p: 1.25 }}>
+                  {submissions.map((submission) => {
+                    const user = getSubmissionUser(submission);
+                    const isSelected = selectedSubmission?._id === submission._id;
+
+                    return (
+                      <Paper
+                        key={submission._id}
+                        variant="outlined"
+                        onClick={() => void handleSelectSubmission(submission)}
+                        sx={{
+                          p: 1.5,
+                          cursor: 'pointer',
+                          borderColor: isSelected ? 'primary.main' : 'divider',
+                          bgcolor: isSelected ? 'action.selected' : 'background.paper'
+                        }}
+                      >
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                {user.fullname || 'Unknown user'}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                                {user.email || 'No email'}
+                              </Typography>
+                            </Box>
+                            <Chip size="small" label={submission.status} variant="outlined" />
+                          </Stack>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {new Date(submission.submittedAt).toLocaleString()}
+                            </Typography>
+                            <Button size="small" startIcon={<ListAltIcon fontSize="small" />}>
+                              {submission.responses.length} answers
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
+
+                  {!submissions.length ? (
+                    <Box sx={{ py: 4, px: 1 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {debouncedSearch ? 'No submissions match the current filter.' : 'No submissions yet.'}
+                      </Typography>
+                    </Box>
+                  ) : null}
+                </Stack>
 
                 <TablePagination
                   component="div"

@@ -22,6 +22,8 @@ import {
   Typography,
   SelectChangeEvent
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AddIcon from '@mui/icons-material/Add';
 import {
   createSurvey,
   fetchSurveyByFriendlyUrl,
@@ -30,6 +32,7 @@ import {
   type QuestionInputType,
   type Survey
 } from '../lib/api';
+import { FeedbackSnackbar, type FeedbackToast } from '../components/FeedbackSnackbar';
 
 type NewSurveyForm = {
   name: string;
@@ -150,6 +153,8 @@ export function CreateSurveyPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusText, setStatusText] = useState('Autosave will keep this draft inactive.');
   const [lastSaved, setLastSaved] = useState<Survey | null>(null);
+  const [triedPublish, setTriedPublish] = useState(false);
+  const [toast, setToast] = useState<FeedbackToast>(null);
   const lastSavedPayload = useRef('');
 
   useEffect(() => {
@@ -232,6 +237,9 @@ export function CreateSurveyPage() {
   );
 
   const hasMinimumInput = normalizedPayload.name.length >= 2 && normalizedPayload.description.length >= 3 && normalizedPayload.note.length >= 1;
+  const nameError = triedPublish && normalizedPayload.name.length < 2;
+  const descriptionError = triedPublish && normalizedPayload.description.length < 3;
+  const noteError = triedPublish && normalizedPayload.note.length < 1;
 
   const saveDraft = async () => {
     if (isEditMode) {
@@ -247,6 +255,7 @@ export function CreateSurveyPage() {
     if (!hasMinimumInput || serialized === lastSavedPayload.current) {
       return;
     }
+    const isFirstSave = !lastSavedPayload.current;
 
     setIsAutosaving(true);
     setError(null);
@@ -272,9 +281,14 @@ export function CreateSurveyPage() {
         })
       );
       setStatusText('Draft saved as INACTIVE.');
+      if (isFirstSave) {
+        setToast({ message: 'Draft saved.', severity: 'success' });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Autosave failed.');
+      const message = err instanceof Error ? err.message : 'Autosave failed.';
+      setError(message);
       setStatusText('Autosave failed.');
+      setToast({ message, severity: 'error' });
     } finally {
       setIsAutosaving(false);
     }
@@ -344,8 +358,14 @@ export function CreateSurveyPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isPublishing || isAutosaving) {
+      return;
+    }
+
+    setTriedPublish(true);
     if (!hasMinimumInput) {
       setError('Please add a name, description, and note before publishing.');
+      setToast({ message: 'Please fill the required survey fields.', severity: 'error' });
       return;
     }
 
@@ -373,9 +393,18 @@ export function CreateSurveyPage() {
       if (!isEditMode) {
         clearDraft();
       }
-      navigate('/home');
+      navigate('/home', {
+        state: {
+          toast: {
+            message: isEditMode ? 'Survey saved.' : 'Survey published.',
+            severity: 'success'
+          }
+        }
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : isEditMode ? 'Could not save survey.' : 'Could not publish survey.');
+      const message = err instanceof Error ? err.message : isEditMode ? 'Could not save survey.' : 'Could not publish survey.';
+      setError(message);
+      setToast({ message, severity: 'error' });
     } finally {
       setIsPublishing(false);
     }
@@ -396,13 +425,18 @@ export function CreateSurveyPage() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
       <AppBar position="static" color="default" elevation={0}>
-        <Toolbar>
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, gap: 1 }}>
+          <Button
+            color="inherit"
+            startIcon={<ArrowBackIcon fontSize="small" />}
+            onClick={() => navigate('/home')}
+            sx={{ minWidth: 0 }}
+          >
+            Back
+          </Button>
           <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
             {isEditMode ? 'Edit Survey' : 'Create Survey'}
           </Typography>
-          <Button color="inherit" onClick={() => navigate('/home')}>
-            Back
-          </Button>
         </Toolbar>
       </AppBar>
 
@@ -413,7 +447,7 @@ export function CreateSurveyPage() {
               <CircularProgress />
             </Box>
           ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <Stack spacing={1.5}>
               <Typography variant="subtitle1">{isEditMode ? 'Edit your survey' : 'Build your survey'}</Typography>
               <TextField
@@ -421,6 +455,8 @@ export function CreateSurveyPage() {
                 value={form.name}
                 onChange={onNameChange}
                 required
+                error={nameError}
+                helperText={nameError ? 'Name needs at least 2 characters.' : ' '}
                 fullWidth
               />
               <TextField
@@ -430,9 +466,19 @@ export function CreateSurveyPage() {
                 required
                 multiline
                 minRows={2}
+                error={descriptionError}
+                helperText={descriptionError ? 'Description needs at least 3 characters.' : ' '}
                 fullWidth
               />
-              <TextField label="Note" value={form.note} onChange={onNoteChange} required fullWidth />
+              <TextField
+                label="Note"
+                value={form.note}
+                onChange={onNoteChange}
+                required
+                error={noteError}
+                helperText={noteError ? 'Add a short note for respondents.' : ' '}
+                fullWidth
+              />
               <Typography variant="body2" color="text.secondary">
                 {statusText}
               </Typography>
@@ -441,8 +487,8 @@ export function CreateSurveyPage() {
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="subtitle1">Questions</Typography>
-                <Button type="button" variant="outlined" size="small" onClick={addQuestion}>
-                  Add Question
+                <Button type="button" variant="outlined" size="small" startIcon={<AddIcon fontSize="small" />} onClick={addQuestion}>
+                  Add question
                 </Button>
               </Box>
               <Stack spacing={1.25}>
@@ -454,6 +500,8 @@ export function CreateSurveyPage() {
                         value={question.title}
                         onChange={(event) => updateQuestion(index, { title: event.target.value })}
                         required
+                        error={triedPublish && question.title.trim().length > 0 && question.title.trim().length < 2}
+                        helperText={triedPublish && question.title.trim().length > 0 && question.title.trim().length < 2 ? 'Question title needs at least 2 characters.' : ' '}
                         fullWidth
                       />
 
@@ -513,7 +561,8 @@ export function CreateSurveyPage() {
                           label="Options"
                           value={question.options}
                           onChange={(event) => updateQuestionOptions(index, event.target.value)}
-                          helperText="Separate options with commas"
+                          error={triedPublish && !toQuestionPayload(question).options.length}
+                          helperText={triedPublish && !toQuestionPayload(question).options.length ? 'Add at least one option.' : 'Separate options with commas'}
                           fullWidth
                         />
                       ) : null}
@@ -552,11 +601,18 @@ export function CreateSurveyPage() {
               </Stack>
 
               <Divider sx={{ my: 1.5 }} />
-              <Stack direction="row" spacing={2}>
-                <Button type="submit" variant="contained" disabled={isPublishing || !hasMinimumInput}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}>
+                <Button type="submit" variant="contained" disabled={isPublishing || isAutosaving}>
                   {isPublishing ? (isEditMode ? 'Saving...' : 'Publishing...') : (isEditMode ? 'Save changes' : 'Publish')}
                 </Button>
-                {isAutosaving ? <CircularProgress size={24} /> : null}
+                {isAutosaving ? (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <CircularProgress size={18} />
+                    <Typography variant="body2" color="text.secondary">
+                      Saving draft...
+                    </Typography>
+                  </Stack>
+                ) : null}
               </Stack>
             </Stack>
           </form>
@@ -570,6 +626,8 @@ export function CreateSurveyPage() {
           </Alert>
         ) : null}
       </Container>
+
+      <FeedbackSnackbar toast={toast} onClose={() => setToast(null)} />
     </Box>
   );
 }

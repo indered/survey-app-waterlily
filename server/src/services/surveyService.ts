@@ -1,5 +1,6 @@
 import { Entry, type EntryDocument } from '../models/Survey.js';
 import { Question } from '../models/Question.js';
+import { Submission } from '../models/Submission.js';
 import type { CreateSurveyQuestionInput, SurveyQuestionInputType, SurveyStatus } from '../dtos/surveyDto.js';
 
 type SurveyPayload = {
@@ -26,6 +27,10 @@ type PaginatedResult<T> = {
   limit: number;
   total: number;
   totalPages: number;
+};
+
+type SurveyListItem = ReturnType<EntryDocument['toObject']> & {
+  submissionsCount: number;
 };
 
 export class SurveyError extends Error {
@@ -90,7 +95,7 @@ export class SurveyService {
     }
   }
 
-  async getSurveys(status?: SurveyStatus, pagination: PaginationParams = {}): Promise<PaginatedResult<EntryDocument>> {
+  async getSurveys(status?: SurveyStatus, pagination: PaginationParams = {}): Promise<PaginatedResult<SurveyListItem>> {
     const filter: Record<string, unknown> = {};
 
     if (status) {
@@ -108,13 +113,36 @@ export class SurveyService {
     const page = Math.max(1, Math.floor(pagination.page || 1));
     const limit = Math.min(100, Math.max(1, Math.floor(pagination.limit || 10)));
 
-    const [items, total] = await Promise.all([
+    const [surveys, total] = await Promise.all([
       Entry.find(filter)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
       Entry.countDocuments(filter)
     ]);
+    const submissionCounts = surveys.length
+      ? await Submission.aggregate<{ _id: unknown; count: number }>([
+        {
+          $match: {
+            surveyId: { $in: surveys.map((survey) => survey._id) },
+            status: 'SUBMITTED'
+          }
+        },
+        {
+          $group: {
+            _id: '$surveyId',
+            count: { $sum: 1 }
+          }
+        }
+      ])
+      : [];
+    const countsBySurveyId = new Map(
+      submissionCounts.map((item) => [String(item._id), item.count])
+    );
+    const items = surveys.map((survey) => ({
+      ...survey.toObject(),
+      submissionsCount: countsBySurveyId.get(survey._id.toString()) || 0
+    }));
 
     return {
       items,
