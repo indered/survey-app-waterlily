@@ -8,6 +8,6 @@
     "server": "PORT=3000 HOST=127.0.0.1 npm --prefix server run dev",
     "build": "npm --prefix server run build && npm --prefix client run build",
     "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
-    "start": "PORT=3000 HOST=127.0.0.1 npm --prefix server start"
+    "start": "npm --prefix server start"
   }
 }
