@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   AppBar,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
+  Divider,
   Paper,
   Stack,
   Table,
@@ -20,7 +22,16 @@ import {
   Toolbar,
   Typography
 } from '@mui/material';
-import { fetchSurveyByFriendlyUrl, fetchSurveySubmissions, type PaginatedResponse, type Submission, type Survey } from '../lib/api';
+import {
+  fetchSubmissionById,
+  fetchSurveyByFriendlyUrl,
+  fetchSurveySubmissions,
+  type Answer,
+  type PaginatedResponse,
+  type Question,
+  type Submission,
+  type Survey
+} from '../lib/api';
 
 export function AdminSurveySubmissionsPage() {
   const { friendlyUrl } = useParams<{ friendlyUrl: string }>();
@@ -33,7 +44,16 @@ export function AdminSurveySubmissionsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loadingSurvey, setLoadingSurvey] = useState(true);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+  const [loadingSelectedSubmission, setLoadingSelectedSubmission] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const [selectedSubmissionError, setSelectedSubmissionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedUser = getSubmissionUser(selectedSubmission);
+  const answerRows = useMemo(
+    () => buildAnswerRows(survey?.questions || [], selectedSubmission),
+    [selectedSubmission, survey]
+  );
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -93,6 +113,13 @@ export function AdminSurveySubmissionsPage() {
           search: debouncedSearch || undefined
         });
         setSubmissionsPage(response.data);
+        setSelectedSubmission((current) => {
+          if (!current) {
+            return null;
+          }
+
+          return response.data.items.some((submission) => submission._id === current._id) ? current : null;
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load submissions');
       } finally {
@@ -102,6 +129,20 @@ export function AdminSurveySubmissionsPage() {
 
     void loadSubmissions();
   }, [friendlyUrl, page, rowsPerPage, debouncedSearch, loadingSurvey, survey]);
+
+  const handleSelectSubmission = async (submission: Submission) => {
+    try {
+      setLoadingSelectedSubmission(true);
+      setSelectedSubmissionError(null);
+      setSelectedSubmission(submission);
+      const response = await fetchSubmissionById(submission._id);
+      setSelectedSubmission(response.data);
+    } catch (err) {
+      setSelectedSubmissionError(err instanceof Error ? err.message : 'Could not load submission answers');
+    } finally {
+      setLoadingSelectedSubmission(false);
+    }
+  };
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
@@ -150,23 +191,31 @@ export function AdminSurveySubmissionsPage() {
             </Stack>
           </Paper>
 
-          <Paper sx={{ overflow: 'hidden' }}>
-            {loadingSurvey || loadingSubmissions ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress />
-              </Box>
-            ) : error ? (
-              <Box sx={{ p: 2 }}>
-                <Alert severity="error">{error}</Alert>
-              </Box>
-            ) : survey?.status !== 'ACTIVE' ? (
-              <Box sx={{ p: 2 }}>
-                <Alert severity="info">Submissions are available after the survey is active.</Alert>
-              </Box>
-            ) : (
-              <>
-                <TableContainer>
-                  <Table size="small" stickyHeader>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.35fr) minmax(340px, 0.65fr)' },
+              gap: 2,
+              alignItems: 'start'
+            }}
+          >
+            <Paper sx={{ overflow: 'hidden' }}>
+              {loadingSurvey || loadingSubmissions ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                  <CircularProgress />
+                </Box>
+              ) : error ? (
+                <Box sx={{ p: 2 }}>
+                  <Alert severity="error">{error}</Alert>
+                </Box>
+              ) : survey?.status !== 'ACTIVE' ? (
+                <Box sx={{ p: 2 }}>
+                  <Alert severity="info">Submissions are available after the survey is active.</Alert>
+                </Box>
+              ) : (
+                <>
+                  <TableContainer>
+                    <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
                         <TableCell sx={{ width: '26%' }}>User</TableCell>
@@ -180,16 +229,17 @@ export function AdminSurveySubmissionsPage() {
                     </TableHead>
                     <TableBody>
                       {(submissionsPage?.items || []).map((submission) => {
-                        const user =
-                          typeof submission.userId === 'string'
-                            ? { fullname: submission.userId, email: '' }
-                            : {
-                                fullname: submission.userId.fullname || '',
-                                email: submission.userId.email || ''
-                              };
+                        const user = getSubmissionUser(submission);
+                        const isSelected = selectedSubmission?._id === submission._id;
 
                         return (
-                          <TableRow key={submission._id}>
+                          <TableRow
+                            key={submission._id}
+                            hover
+                            selected={isSelected}
+                            onClick={() => void handleSelectSubmission(submission)}
+                            sx={{ cursor: 'pointer' }}
+                          >
                             <TableCell>{user.fullname || 'Unknown user'}</TableCell>
                             <TableCell>{user.email || 'No email'}</TableCell>
                             <TableCell>{submission.status}</TableCell>
@@ -210,26 +260,179 @@ export function AdminSurveySubmissionsPage() {
                         </TableRow>
                       ) : null}
                     </TableBody>
-                  </Table>
-                </TableContainer>
+                    </Table>
+                  </TableContainer>
 
-                <TablePagination
-                  component="div"
-                  count={submissionsPage?.total || 0}
-                  page={page}
-                  onPageChange={(_event, nextPage) => setPage(nextPage)}
-                  rowsPerPage={rowsPerPage}
-                  onRowsPerPageChange={(event) => {
-                    setRowsPerPage(Number(event.target.value));
-                    setPage(0);
-                  }}
-                  rowsPerPageOptions={[5, 10, 25]}
-                />
-              </>
-            )}
+                  <TablePagination
+                    component="div"
+                    count={submissionsPage?.total || 0}
+                    page={page}
+                    onPageChange={(_event, nextPage) => setPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(event) => {
+                      setRowsPerPage(Number(event.target.value));
+                      setPage(0);
+                    }}
+                    rowsPerPageOptions={[5, 10, 25]}
+                  />
+                </>
+              )}
           </Paper>
         </Stack>
       </Container>
+
+      <Dialog
+        open={answerDialogOpen}
+        onClose={() => setAnswerDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Submission answers</DialogTitle>
+        <DialogContent dividers>
+          {loadingSelectedSubmission ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : selectedSubmissionError ? (
+            <Alert severity="error">{selectedSubmissionError}</Alert>
+          ) : !selectedSubmission ? (
+            <Alert severity="info">No submission selected.</Alert>
+          ) : (
+            <Stack spacing={2}>
+              <Box>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {selectedUser.fullname || 'Unknown user'}
+                  </Typography>
+                  <Chip size="small" label={selectedSubmission.status} variant="outlined" />
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedUser.email || 'No email'} | {new Date(selectedSubmission.submittedAt).toLocaleString()}
+                </Typography>
+              </Box>
+              <Divider />
+
+              {answerRows.length ? (
+                <Stack spacing={1}>
+                  {answerRows.map((answer) => (
+                    <Box
+                      key={answer.key}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.25,
+                        bgcolor: 'background.default'
+                      }}
+                    >
+                      <Stack spacing={0.75}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {answer.title}
+                          </Typography>
+                          {answer.inputType ? (
+                            <Chip size="small" label={answer.inputType} variant="outlined" />
+                          ) : null}
+                        </Stack>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {answer.value}
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
+              ) : (
+                <Alert severity="info">This submission does not have answers yet.</Alert>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAnswerDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
+
+const getSubmissionUser = (submission: Submission | null) => {
+  if (!submission) {
+    return {
+      fullname: '',
+      email: ''
+    };
+  }
+
+  if (typeof submission.userId === 'string') {
+    return {
+      fullname: submission.userId,
+      email: ''
+    };
+  }
+
+  return {
+    fullname: submission.userId.fullname || '',
+    email: submission.userId.email || ''
+  };
+};
+
+const buildAnswerRows = (questions: Question[], submission: Submission | null) => {
+  if (!submission) {
+    return [];
+  }
+
+  const answersByQuestionId = new Map(
+    submission.responses.map((answer) => [getAnswerQuestionId(answer), answer])
+  );
+
+  if (questions.length) {
+    return questions.map((question) => {
+      const answer = answersByQuestionId.get(question._id);
+      return {
+        key: question._id,
+        title: question.title,
+        inputType: question.inputType,
+        value: formatAnswerValue(answer?.response)
+      };
+    });
+  }
+
+  return submission.responses.map((answer, index) => ({
+    key: getAnswerQuestionId(answer) || `answer-${index}`,
+    title: getAnswerQuestionTitle(answer) || `Question ${index + 1}`,
+    inputType: getAnswerQuestionType(answer),
+    value: formatAnswerValue(answer.response)
+  }));
+};
+
+const getAnswerQuestionId = (answer: Answer) => {
+  return typeof answer.questionId === 'string' ? answer.questionId : answer.questionId._id;
+};
+
+const getAnswerQuestionTitle = (answer: Answer) => {
+  return typeof answer.questionId === 'string' ? '' : answer.questionId.title;
+};
+
+const getAnswerQuestionType = (answer: Answer) => {
+  return typeof answer.questionId === 'string' ? undefined : answer.questionId.inputType;
+};
+
+const formatAnswerValue = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return 'No answer';
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map(String).join(', ') : 'No answer';
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
+};

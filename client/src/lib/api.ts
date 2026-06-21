@@ -63,8 +63,14 @@ export type CreateSurveyQuestionPayload = {
   isRequired?: boolean;
 };
 
+export type AnswerQuestion = {
+  _id: string;
+  title: string;
+  inputType: QuestionInputType;
+};
+
 export type Answer = {
-  questionId: string;
+  questionId: string | AnswerQuestion;
   response: unknown;
 };
 
@@ -266,6 +272,12 @@ export const fetchSubmissions = async (params: {
 
 export const fetchMySubmissions = async () => {
   return apiFetch<{ ok: true; data: Submission[] }>('/submissions/mine', {
+    method: 'GET'
+  });
+};
+
+export const fetchSubmissionById = async (id: string) => {
+  return apiFetch<{ ok: true; data: Submission }>(`/submissions/${encodeURIComponent(id)}`, {
     method: 'GET'
   });
 };

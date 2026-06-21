@@ -132,7 +132,8 @@ const answersFromSubmission = (submission: Submission | null) => {
   }
 
   return submission.responses.reduce((accumulator, answer) => {
-    accumulator[answer.questionId] = answer.response;
+    const questionId = typeof answer.questionId === 'string' ? answer.questionId : answer.questionId._id;
+    accumulator[questionId] = answer.response;
     return accumulator;
   }, {} as AnswerMap);
 };
