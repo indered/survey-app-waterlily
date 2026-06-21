@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 type ApiError = Error & {
   name: string;
+  statusCode?: number;
 };
 
 export const errorHandler = (
@@ -24,6 +25,13 @@ export const errorHandler = (
     return res.status(400).json({
       ok: false,
       message: 'Invalid ID format'
+    });
+  }
+
+  if (err.statusCode) {
+    return res.status(err.statusCode).json({
+      ok: false,
+      message: err.message
     });
   }
 

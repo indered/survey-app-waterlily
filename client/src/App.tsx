@@ -1,23 +1,96 @@
-import './App.css';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AdminHome } from './pages/AdminHome';
+import { AuthPage } from './pages/AuthPage';
+import { CreateSurveyPage } from './pages/CreateSurveyPage';
+import { AdminSurveyPage } from './pages/AdminSurveyPage';
+import { AdminSurveySubmissionsPage } from './pages/AdminSurveySubmissionsPage';
+import { SurveyViewPage } from './pages/SurveyViewPage';
 import HealthCheck from './components/HealthCheck';
+import type { ReactNode } from 'react';
+import { CircularProgress, Container } from '@mui/material';
+
+function ProtectedRoute({
+  children,
+  requireAdmin
+}: {
+  children: ReactNode;
+  requireAdmin?: boolean;
+}) {
+  const { isAuthenticated, user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Container maxWidth="sm" sx={{ mt: 8, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (requireAdmin && user.role !== 'admin') {
+    return <Navigate to="/auth" replace />;
+  }
+
+  return children;
+}
+
+function AppRoutes() {
+  const { isAuthenticated, user } = useAuth();
+
+  const homeTarget = isAuthenticated && user?.role === 'admin' ? '/home' : '/auth';
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to={homeTarget} replace />} />
+      <Route path="/auth" element={<AuthPage />} />
+      <Route path="/health" element={<HealthCheck />} />
+      <Route
+        path="/home"
+        element={
+          <ProtectedRoute requireAdmin>{<AdminHome />}</ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home/create"
+        element={
+          <ProtectedRoute requireAdmin>{<CreateSurveyPage />}</ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home/surveys/:friendlyUrl"
+        element={
+          <ProtectedRoute requireAdmin>{<AdminSurveyPage />}</ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home/surveys/:friendlyUrl/edit"
+        element={
+          <ProtectedRoute requireAdmin>{<CreateSurveyPage />}</ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home/surveys/:friendlyUrl/submissions"
+        element={
+          <ProtectedRoute requireAdmin>{<AdminSurveySubmissionsPage />}</ProtectedRoute>
+        }
+      />
+      <Route path="/survey/:friendlyUrl" element={<SurveyViewPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/health" element={<HealthCheck />} />
-        <Route path="/" element={
-          <main className="status-page">
-            <section className="status-panel">
-              <p className="eyebrow">MERN bootstrap</p>
-              <h1>survey-app-waterlily is running.</h1>
-              <p>The API is available at <code>/api/health</code>.</p>
-            </section>
-          </main>
-        } />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

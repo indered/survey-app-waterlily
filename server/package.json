@@ -6,19 +6,24 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
+    "migrate:admin": "tsx src/scripts/seedAdmin.ts",
+    "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "class-validator": "^0.14.2",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.16.0",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

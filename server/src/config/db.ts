@@ -20,3 +20,15 @@ export async function connectDB(mongoUri: string | undefined): Promise<void> {
     console.error('MongoDB connection failed:', message);
   }
 }
+
+export function isDbConnected(): boolean {
+  return mongoose.connection.readyState === 1;
+}
+
+export async function disconnectDB(): Promise<void> {
+  if (!isDbConnected()) {
+    return;
+  }
+
+  await mongoose.disconnect();
+}

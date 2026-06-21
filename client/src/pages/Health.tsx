@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Alert, Container, Paper, Typography } from '@mui/material';
 
 type HealthResponse = {
   ok: boolean;
@@ -15,7 +16,10 @@ export default function Health() {
     const fetchHealth = async () => {
       try {
         const response = await fetch('/api/health');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
         const data = await response.json();
         setHealth(data);
         setError(null);
@@ -27,31 +31,26 @@ export default function Health() {
       }
     };
 
-    fetchHealth();
+    void fetchHealth();
   }, []);
 
   return (
-    <main className="status-page">
-      <section className="status-panel">
-        <p className="eyebrow">API Health</p>
+    <Container maxWidth={false} sx={{ mt: 2, px: { xs: 1.5, md: 2 }, width: 1 }}>
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="overline" color="text.secondary">
+          API Health
+        </Typography>
 
-        {loading && <p>Loading...</p>}
-
-        {error && (
-          <div>
-            <h1>API Error</h1>
-            <p>{error}</p>
-          </div>
-        )}
-
+        {loading && <Typography>Loading...</Typography>}
+        {error && <Alert severity="error">{error}</Alert>}
         {health && (
-          <div>
-            <h1>{health.ok ? '✓ Healthy' : '✗ Unhealthy'}</h1>
-            <p><strong>Service:</strong> {health.service}</p>
-            <p><strong>MongoDB:</strong> {health.mongo}</p>
-          </div>
+          <>
+            <Typography variant="subtitle1">{health.ok ? 'Healthy' : 'Unhealthy'}</Typography>
+            <Typography variant="body2"><strong>Service:</strong> {health.service}</Typography>
+            <Typography variant="body2"><strong>MongoDB:</strong> {health.mongo}</Typography>
+          </>
         )}
-      </section>
-    </main>
+      </Paper>
+    </Container>
   );
 }

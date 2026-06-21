@@ -1,22 +1,26 @@
 import { Schema, model, type HydratedDocument, type InferSchemaType } from 'mongoose';
 
-const entrySchema = new Schema(
+const surveySchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
-    note: { type: String, required: true, trim: true }
+    friendlyUrl: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true
+    },
+    description: { type: String, required: true, trim: true },
+    status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE", required: true },
+    note: { type: String, required: true, trim: true },
+    createdBy: { type: String, required: true, trim: true }
   },
-  { timestamps: true, collection: 'survey_app_waterlily_entries' }
+  { timestamps: true, collection: 'surveySchema' }
 );
 
-export type EntryRecord = InferSchemaType<typeof entrySchema>;
+surveySchema.index({ friendlyUrl: 1 }, { unique: true });
+surveySchema.index({ status: 1, createdAt: -1 });
+
+export type EntryRecord = InferSchemaType<typeof surveySchema>;
 export type EntryDocument = HydratedDocument<EntryRecord>;
 
-export const Entry = model<EntryRecord>('Entry', entrySchema);
-
-// Future survey model notes:
-// survey: name, id, status active/inactive
-// questions: surveyId, title, order, description, inputType, options, isActive
-// user: id, fullname, email/phone
-// responses: questionId, surveyId, userId, response
-// submission: id, surveyId, userId, responses, submittedAt, status
+export const Entry = model<EntryRecord>('Survey', surveySchema);
