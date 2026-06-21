@@ -1,11 +1,17 @@
 import { validate } from 'class-validator';
+import type { NextFunction, Request, Response } from 'express';
+import type { ValidationError } from 'class-validator';
 import { CreateEntryDto } from '../dtos/createEntryDto.js';
 import { UpdateEntryDto } from '../dtos/updateEntryDto.js';
 import { EntryService } from '../services/entryService.js';
 
 const entryService = new EntryService();
 
-function formatValidationErrors(errors) {
+function routeParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] : value || '';
+}
+
+function formatValidationErrors(errors: ValidationError[]) {
   return errors.map((error) => ({
     field: error.property,
     messages: Object.values(error.constraints || {})
@@ -13,7 +19,7 @@ function formatValidationErrors(errors) {
 }
 
 export const entryController = {
-  async createEntry(req, res, next) {
+  async createEntry(req: Request, res: Response, next: NextFunction) {
     try {
       const dto = new CreateEntryDto(req.body);
       const errors = await validate(dto, {
@@ -39,7 +45,7 @@ export const entryController = {
     }
   },
 
-  async getEntries(req, res, next) {
+  async getEntries(_req: Request, res: Response, next: NextFunction) {
     try {
       const entries = await entryService.getEntries();
       return res.json({
@@ -51,9 +57,9 @@ export const entryController = {
     }
   },
 
-  async getEntryById(req, res, next) {
+  async getEntryById(req: Request, res: Response, next: NextFunction) {
     try {
-      const entry = await entryService.getEntryById(req.params.id);
+      const entry = await entryService.getEntryById(routeParam(req.params.id));
       if (!entry) {
         return res.status(404).json({
           ok: false,
@@ -69,7 +75,7 @@ export const entryController = {
     }
   },
 
-  async updateEntry(req, res, next) {
+  async updateEntry(req: Request, res: Response, next: NextFunction) {
     try {
       const dto = new UpdateEntryDto(req.body);
       const errors = await validate(dto, {
@@ -85,7 +91,7 @@ export const entryController = {
         });
       }
 
-      const entry = await entryService.updateEntry(req.params.id, dto);
+      const entry = await entryService.updateEntry(routeParam(req.params.id), dto);
       if (!entry) {
         return res.status(404).json({
           ok: false,
@@ -102,9 +108,9 @@ export const entryController = {
     }
   },
 
-  async deleteEntry(req, res, next) {
+  async deleteEntry(req: Request, res: Response, next: NextFunction) {
     try {
-      const entry = await entryService.deleteEntry(req.params.id);
+      const entry = await entryService.deleteEntry(routeParam(req.params.id));
       if (!entry) {
         return res.status(404).json({
           ok: false,

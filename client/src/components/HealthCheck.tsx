@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 
+type HealthResponse = {
+  ok: boolean;
+  service: string;
+  mongo: string;
+};
+
 export default function HealthCheck() {
-  const [health, setHealth] = useState(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -14,7 +20,7 @@ export default function HealthCheck() {
         setHealth(data);
         setError(null);
       } catch (err) {
-        setError(err.message);
+        setError(err instanceof Error ? err.message : 'Unknown error');
         setHealth(null);
       } finally {
         setLoading(false);

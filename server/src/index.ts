@@ -8,7 +8,7 @@ import entryRoutes from './routes/entryRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || (process.env.RENDER ? '0.0.0.0' : '127.0.0.1');
 const mongoUri = process.env.MONGODB_URI;
 const __filename = fileURLToPath(import.meta.url);
@@ -42,4 +42,3 @@ const httpServer = app.listen(port, host, () => {
 });
 
 httpServer.keepAliveTimeout = 65000;
-

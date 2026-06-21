@@ -1,7 +1,11 @@
 import { IsEmail, IsString, Length } from 'class-validator';
 
 export class CreateEntryDto {
-  constructor(data = {}) {
+  name!: string;
+  email!: string;
+  note!: string;
+
+  constructor(data: Partial<CreateEntryDto> = {}) {
     Object.assign(this, data);
   }
 }

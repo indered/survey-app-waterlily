@@ -1,7 +1,11 @@
 import { IsEmail, IsOptional, IsString, Length } from 'class-validator';
 
 export class UpdateEntryDto {
-  constructor(data = {}) {
+  name?: string;
+  email?: string;
+  note?: string;
+
+  constructor(data: Partial<UpdateEntryDto> = {}) {
     Object.assign(this, data);
   }
 }

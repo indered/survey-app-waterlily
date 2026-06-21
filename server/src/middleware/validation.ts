@@ -1,7 +1,10 @@
 import { validate } from 'class-validator';
+import type { NextFunction, Request, Response } from 'express';
 
-export const validateDto = (dtoClass) => {
-  return async (req, res, next) => {
+type DtoConstructor<T> = new (data?: Partial<T>) => T;
+
+export const validateDto = <T extends object>(dtoClass: DtoConstructor<T>) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const dto = new dtoClass(req.body);
     const errors = await validate(dto, {
       whitelist: true,
@@ -19,7 +22,6 @@ export const validateDto = (dtoClass) => {
       });
     }
 
-    req.validatedDto = dto;
     next();
   };
 };

@@ -6,7 +6,8 @@
   "scripts": {
     "client": "npm --prefix client run dev -- --host 127.0.0.1 --port 3001",
     "server": "PORT=3000 npm --prefix server run dev",
-    "build": "npm --prefix client run build",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
     "start": "npm --prefix server start"
   }
 }

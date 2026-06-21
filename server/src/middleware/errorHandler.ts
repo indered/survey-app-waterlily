@@ -1,4 +1,15 @@
-export const errorHandler = (err, req, res, next) => {
+import type { NextFunction, Request, Response } from 'express';
+
+type ApiError = Error & {
+  name: string;
+};
+
+export const errorHandler = (
+  err: ApiError,
+  _req: Request,
+  res: Response,
+  _next: NextFunction
+) => {
   console.error('Error:', err.message);
 
   if (err.name === 'ValidationError') {
