@@ -36,13 +36,35 @@ export async function ensureAdminUser(mongoUri = defaultMongoUri): Promise<SeedA
     };
   }
 
-  const existingAdmin = await User.findOne({ email: ADMIN_EMAIL });
+  const existingAdmin = await User.findOne({ email: ADMIN_EMAIL }).select('+passwordHash');
 
   if (existingAdmin) {
+    const passwordMatches = await bcrypt.compare(ADMIN_PASSWORD, existingAdmin.passwordHash);
+    let changed = false;
+
+    if (!passwordMatches) {
+      existingAdmin.passwordHash = await bcrypt.hash(ADMIN_PASSWORD, PASSWORD_SALT_ROUNDS);
+      changed = true;
+    }
+
+    if (existingAdmin.role !== 'admin') {
+      existingAdmin.role = 'admin';
+      changed = true;
+    }
+
+    if (!existingAdmin.fullname) {
+      existingAdmin.fullname = 'Waterlily Admin';
+      changed = true;
+    }
+
+    if (changed) {
+      await existingAdmin.save();
+    }
+
     return {
       ok: true,
-      changed: false,
-      message: 'Admin user already exists. No changes made.'
+      changed,
+      message: changed ? `Admin user was repaired: ${ADMIN_EMAIL}` : 'Admin user already exists. No changes made.'
     };
   }
 
