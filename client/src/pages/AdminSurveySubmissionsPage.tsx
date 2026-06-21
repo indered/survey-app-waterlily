@@ -198,22 +198,22 @@ export function AdminSurveySubmissionsPage() {
           </Paper>
 
           <Paper sx={{ overflow: 'hidden' }}>
-              {loadingSurvey || loadingSubmissions ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                  <CircularProgress />
-                </Box>
-              ) : error ? (
-                <Box sx={{ p: 2 }}>
-                  <Alert severity="error">{error}</Alert>
-                </Box>
-              ) : survey?.status !== 'ACTIVE' ? (
-                <Box sx={{ p: 2 }}>
-                  <Alert severity="info">Submissions are available after the survey is active.</Alert>
-                </Box>
-              ) : (
-                <>
-                  <TableContainer>
-                    <Table size="small" stickyHeader>
+            {loadingSurvey || loadingSubmissions ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
+            ) : error ? (
+              <Box sx={{ p: 2 }}>
+                <Alert severity="error">{error}</Alert>
+              </Box>
+            ) : survey?.status !== 'ACTIVE' ? (
+              <Box sx={{ p: 2 }}>
+                <Alert severity="info">Submissions are available after the survey is active.</Alert>
+              </Box>
+            ) : (
+              <>
+                <TableContainer>
+                  <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
                         <TableCell sx={{ width: '26%' }}>User</TableCell>
@@ -258,23 +258,23 @@ export function AdminSurveySubmissionsPage() {
                         </TableRow>
                       ) : null}
                     </TableBody>
-                    </Table>
-                  </TableContainer>
+                  </Table>
+                </TableContainer>
 
-                  <TablePagination
-                    component="div"
-                    count={submissionsPage?.total || 0}
-                    page={page}
-                    onPageChange={(_event, nextPage) => setPage(nextPage)}
-                    rowsPerPage={rowsPerPage}
-                    onRowsPerPageChange={(event) => {
-                      setRowsPerPage(Number(event.target.value));
-                      setPage(0);
-                    }}
-                    rowsPerPageOptions={[5, 10, 25]}
-                  />
-                </>
-              )}
+                <TablePagination
+                  component="div"
+                  count={submissionsPage?.total || 0}
+                  page={page}
+                  onPageChange={(_event, nextPage) => setPage(nextPage)}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={(event) => {
+                    setRowsPerPage(Number(event.target.value));
+                    setPage(0);
+                  }}
+                  rowsPerPageOptions={[5, 10, 25]}
+                />
+              </>
+            )}
           </Paper>
         </Stack>
       </Container>
@@ -284,6 +284,7 @@ export function AdminSurveySubmissionsPage() {
         onClose={() => setAnswerDialogOpen(false)}
         fullWidth
         maxWidth="md"
+        slotProps={{ paper: { sx: { borderRadius: 1 } } }}
       >
         <DialogTitle>Submission answers</DialogTitle>
         <DialogContent dividers>
@@ -305,7 +306,7 @@ export function AdminSurveySubmissionsPage() {
                   <Chip size="small" label={selectedSubmission.status} variant="outlined" />
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
-                  {selectedUser.email || 'No email'} | {new Date(selectedSubmission.submittedAt).toLocaleString()}
+                  {selectedUser.email || 'No email'} / {new Date(selectedSubmission.submittedAt).toLocaleString()}
                 </Typography>
               </Box>
               <Divider />
