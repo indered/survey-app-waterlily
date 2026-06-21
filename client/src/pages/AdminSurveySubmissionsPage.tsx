@@ -9,6 +9,10 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   Stack,
   Table,
@@ -47,6 +51,7 @@ export function AdminSurveySubmissionsPage() {
   const [loadingSelectedSubmission, setLoadingSelectedSubmission] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [selectedSubmissionError, setSelectedSubmissionError] = useState<string | null>(null);
+  const [answerDialogOpen, setAnswerDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedUser = getSubmissionUser(selectedSubmission);
@@ -132,6 +137,7 @@ export function AdminSurveySubmissionsPage() {
 
   const handleSelectSubmission = async (submission: Submission) => {
     try {
+      setAnswerDialogOpen(true);
       setLoadingSelectedSubmission(true);
       setSelectedSubmissionError(null);
       setSelectedSubmission(submission);
@@ -191,15 +197,7 @@ export function AdminSurveySubmissionsPage() {
             </Stack>
           </Paper>
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.35fr) minmax(340px, 0.65fr)' },
-              gap: 2,
-              alignItems: 'start'
-            }}
-          >
-            <Paper sx={{ overflow: 'hidden' }}>
+          <Paper sx={{ overflow: 'hidden' }}>
               {loadingSurvey || loadingSubmissions ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                   <CircularProgress />
